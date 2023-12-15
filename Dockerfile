@@ -1,5 +1,6 @@
 FROM node:21.2.0
-WORKDIR /usr/app
+RUN mkdir -p /usr/src/nuxt-app
+WORKDIR /usr/src/nuxt-app
 
 COPY pages ./pages
 COPY plugins ./plugins
@@ -19,4 +20,7 @@ RUN npm run build
 USER node
 EXPOSE 8080
 
-ENTRYPOINT [ "npm run start" ]
+ENV NUXT_HOST=0.0.0.0
+ENV NUXT_PORT=8080
+
+CMD [ "npm", "start" ]

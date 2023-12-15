@@ -12,10 +12,6 @@ export default defineNuxtConfig({
       link: [{ rel: 'icon', type: 'image/x-icon', href: '/favicon.ico' }]
     },
   },
-  server: {
-    port: 8080,
-    host: '0.0.0.0'
-  },
   modules: [
     (_options, nuxt) => {
       nuxt.hooks.hook('vite:extendConfig', (config) => {
