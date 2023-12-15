@@ -1,18 +1,96 @@
-name: Docker Image CI
+name: Build and Deploy to EC2
 
 on:
   push:
-    branches: [ "master" ]
-  pull_request:
-    branches: [ "master" ]
+    branches:
+      - master
+
+concurrency: deployment
 
 jobs:
+  env:
+    name: Set Env Vars
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up DEV Environment Variables
+        if: github.ref == 'refs/heads/dev'
+        run: |
+          matrix='{
+            "env":[
+              {
+                "ecr_repo_name":"mindfullstack-dev",
+                "aws_key_name":"aws_key",
+                "aws_secret_name":"aws_secret"
+              }
+            ]
+          }'
+          echo matrix=`echo $matrix | jq -c .` >> $GITHUB_ENV
 
-  build:
+      - name: Set up PRD Environment Variables
+        if: github.ref == 'refs/heads/master'
+        run: |
+          matrix='{
+            "env":[
+              {
+                "ecr_repo_name":"mindfullstack-prd",
+                "aws_key_name":"aws_key",
+                "aws_secret_name":"aws_secret"
+              }
+            ]
+          }'
+          echo matrix=`echo $matrix | jq -c .` >> $GITHUB_ENV
 
+    outputs:
+      matrix: ${{ env.matrix }}
+
+  build-and-deploy:
+    name: Build and Deploy Docker Image to EC2
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
-    - name: Build the Docker image
-      run: docker build . --file Dockerfile --tag mindfullstack:$(date +%s)
+    - name: Checkout Repository
+      uses: actions/checkout@v3
+
+    - name: Set up Docker
+      uses: actions/setup-docker@v2
+      with:
+        dockerfile: Dockerfile  # Specify your Dockerfile path if it's not at the root
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ secrets[matrix.env.aws_key_name] }}
+        aws-secret-access-key: ${{ secrets[matrix.env.aws_secret_name] }}
+        aws-region: us-west-2
+
+    - name: Log into Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v1
+
+    - name: Get Current Timestamp
+      id: date
+      run: echo "::set-output name=timestamp::$(date +'%Y-%m-%d_%H-%M-%S')"
+
+    - name: Build and Push the Docker image
+      id: build-image
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        ECR_REPO: ${{ matrix.env.ecr_repo_name }}
+        IMAGE_TAG: ${{ steps.date.outputs.timestamp }}
+      run: |
+        docker build ./ --file ./Dockerfile --tag $ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG
+        docker push $ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG
+        echo "::set-output name=image::$ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG"
+
+    - name: SSH into EC2 and Pull Docker Image
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.EC2_HOST }}               #figure out once terraform apply is completed successfully.
+        username: ${{ secrets.EC2_USERNAME }}
+        key: ${{ secrets.EC2_PRIVATE_KEY }}
+        port: ${{ secrets.EC2_PORT }}
+        script: |
+          docker pull ${{ steps.build-image.outputs.image }}
+          docker stop mindfullstack || true
+          docker rm mindfullstack || true
+          docker run -d -p 8080:8080 --name mindfullstack ${{ steps.build-image.outputs.image }}
