@@ -20,6 +20,25 @@ data "aws_acm_certificate" "issued" {
   statuses = ["ISSUED"]
 }
 
+resource "aws_security_group" "ec2_ssh" {
+  name        = "ec2-ssh-sg"
+  description = "Security group for SSH access to EC2 instance"
+
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"] # Replace with your IP address or range
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
 # EC2 instance
 resource "aws_instance" "front_end" {
   ami           = "ami-093467ec28ae4fe03"  # Change to your desired AMI ID
@@ -30,7 +49,7 @@ resource "aws_instance" "front_end" {
     Name = "front-end-instance"
   }
 
-  # ... other instance configuration ...
+  vpc_security_group_ids = [aws_security_group.ec2_ssh.id]
 
   user_data = <<-EOF
               #!/bin/bash

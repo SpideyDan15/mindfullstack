@@ -8,41 +8,6 @@ on:
 concurrency: deployment
 
 jobs:
-  env:
-    name: Set Env Vars
-    runs-on: ubuntu-latest
-    steps:
-      - name: Set up DEV Environment Variables
-        if: github.ref == 'refs/heads/dev'
-        run: |
-          matrix='{
-            "env":[
-              {
-                "ecr_repo_name":"mindfullstack-dev",
-                "aws_key_name":"aws_key",
-                "aws_secret_name":"aws_secret"
-              }
-            ]
-          }'
-          echo matrix=`echo $matrix | jq -c .` >> $GITHUB_ENV
-
-      - name: Set up PRD Environment Variables
-        if: github.ref == 'refs/heads/master'
-        run: |
-          matrix='{
-            "env":[
-              {
-                "ecr_repo_name":"mindfullstack-prd",
-                "aws_key_name":"aws_key",
-                "aws_secret_name":"aws_secret"
-              }
-            ]
-          }'
-          echo matrix=`echo $matrix | jq -c .` >> $GITHUB_ENV
-
-    outputs:
-      matrix: ${{ env.matrix }}
-
   build-and-deploy:
     name: Build and Deploy Docker Image to EC2
     runs-on: ubuntu-latest
@@ -57,8 +22,8 @@ jobs:
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v1
       with:
-        aws-access-key-id: ${{ secrets[matrix.env.aws_key_name] }}
-        aws-secret-access-key: ${{ secrets[matrix.env.aws_secret_name] }}
+        aws-access-key-id: ${{ secrets.AWS_KEY }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET }}
         aws-region: us-west-2
 
     - name: Log into Amazon ECR
@@ -73,7 +38,7 @@ jobs:
       id: build-image
       env:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-        ECR_REPO: ${{ matrix.env.ecr_repo_name }}
+        ECR_REPO: mindfullstack-prd
         IMAGE_TAG: ${{ steps.date.outputs.timestamp }}
       run: |
         docker build ./ --file ./Dockerfile --tag $ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG
@@ -84,9 +49,8 @@ jobs:
       uses: appleboy/ssh-action@master
       with:
         host: ${{ secrets.EC2_HOST }}               #figure out once terraform apply is completed successfully.
-        username: ${{ secrets.EC2_USERNAME }}
-        key: ${{ secrets.EC2_PRIVATE_KEY }}
-        port: ${{ secrets.EC2_PORT }}
+        username: ec2-user
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
         script: |
           docker pull ${{ steps.build-image.outputs.image }}
           docker stop mindfullstack || true
