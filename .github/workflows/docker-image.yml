@@ -49,12 +49,14 @@ jobs:
 
     - name: SSH into EC2 and Pull Docker Image
       uses: appleboy/ssh-action@master
+      env:
+        IMAGE: ${{ steps.build-image.outputs.image }}
       with:
         host: ${{ secrets.EC2_HOST }}               #figure out once terraform apply is completed successfully.
         username: ec2-user
         key: ${{ secrets.SSH_PRIVATE_KEY }}
         script: |
-          docker pull ${{ steps.build-image.outputs.image }}
+          docker pull $IMAGE
           docker stop mindfullstack || true
           docker rm mindfullstack || true
-          docker run -d -p 8080:8080 --name mindfullstack ${{ steps.build-image.outputs.image }}
+          docker run -d -p 8080:8080 --name mindfullstack $IMAGE
