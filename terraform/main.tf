@@ -20,6 +20,54 @@ data "aws_acm_certificate" "issued" {
   statuses = ["ISSUED"]
 }
 
+resource "aws_iam_policy" "ecr_read_only" {
+  name        = "ecr-readonly-policy"
+  description = "ECR read-only access policy for EC2 instances"
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect = "Allow",
+        Action = [
+          "ecr:GetDownloadUrlForLayer",
+          "ecr:BatchGetImage",
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:GetAuthorizationToken"
+        ],
+        Resource = "*"  # Replace with specific ECR repository ARN if needed
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role" "ec2_role" {
+  name = "ec2-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Action = "sts:AssumeRole",
+        Effect = "Allow",
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        },
+      },
+    ],
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "ecr_read_only_attach" {
+  role       = aws_iam_role.ec2_role.name
+  policy_arn = aws_iam_policy.ecr_read_only.arn
+}
+
+resource "aws_iam_instance_profile" "ec2_instance_profile" {
+  name = "ec2-instance-profile"
+  role = aws_iam_role.ec2_role.name
+}
+
 resource "aws_security_group" "ec2_ssh" {
   name        = "ec2-ssh-sg"
   description = "Security group for SSH access to EC2 instance"
@@ -44,6 +92,7 @@ resource "aws_instance" "front_end" {
   ami           = "ami-093467ec28ae4fe03"  # Change to your desired AMI ID
   instance_type = "t2.nano"
   key_name      = var.key_pair_name
+  iam_instance_profile = aws_iam_instance_profile.ec2_instance_profile.name
 
   tags = {
     Name = "front-end-instance"
