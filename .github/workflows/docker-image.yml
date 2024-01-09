@@ -57,6 +57,7 @@ jobs:
         username: ec2-user
         key: ${{ secrets.SSH_PRIVATE_KEY }}
         script: |
+          echo $AWS_ACCOUNT_ID.dkr.ecr.us-west-2.amazonaws.com
           aws ecr get-login-password --region us-west-2 | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.us-west-2.amazonaws.com
           docker pull $IMAGE
           docker stop mindfullstack || true
