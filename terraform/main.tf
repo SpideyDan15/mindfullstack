@@ -79,6 +79,13 @@ resource "aws_security_group" "ec2_ssh" {
     cidr_blocks = ["0.0.0.0/0"] # Replace with your IP address or range
   }
 
+  ingress {
+    from_port   = 8080
+    to_port     = 8080
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]  # Adjust this as needed
+  }
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -157,12 +164,14 @@ resource "aws_lb_listener" "https_listener" {
 # ALB Target Group
 resource "aws_lb_target_group" "front_end" {
   name     = "front-end-target-group"
-  port     = 80
+  port     = 8080
   protocol = "HTTP"
   vpc_id   = data.aws_vpc.default.id #vpc_id   = "vpc-xxxxxxxxxxxxxxxxx"  # Change to your VPC ID
 
   health_check {
     path                = "/"
+    port                = 8080
+    protocol            = "HTTP"
     interval            = 30
     timeout             = 5
     healthy_threshold   = 2
